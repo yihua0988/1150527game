@@ -134,7 +134,6 @@
 
         <div id="start-screen" class="interactive w-100" style="position: absolute; bottom: 4vh; left: 0; display: flex; flex-direction: column; align-items: center;">
             <div class="glass-panel p-4 p-md-5 text-center shadow-lg">
-                <!-- ★ 修改：已移除首頁多出來的圖片 -->
                 <div class="text-light text-start mx-auto mb-3 text-15x-md" style="line-height: 1.5; max-width: 800px; padding: 15px; border-left: 4px solid #00ff00; background: rgba(0,255,0,0.1);">
                     大盤遭降維打擊，綠K線突變噬血巨獸！撿紅利、喚外資，用肉身硬扛宇宙級股災，活下去！
                 </div>
@@ -239,10 +238,9 @@
         bgm.loop = true; 
         bgm.volume = 0.5;
 
-        // ★ 效能大優化：建立子彈音效的「音頻池 (Audio Pool)」
-        // 避免手機每次發射子彈都 cloneNode 導致記憶體爆炸和卡頓
+        // ★ 音效池優化：解決重疊發聲卡頓
         const shootPool = [];
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 5; i++) {
             let a = new Audio('sfx_shoot.mp3');
             a.volume = 0.5;
             shootPool.push(a);
@@ -256,7 +254,6 @@
             shootIdx = (shootIdx + 1) % shootPool.length;
         }
 
-        // 其他單次音效直接播放即可
         const sfxBuff = new Audio('sfx_buff.mp3'); sfxBuff.volume = 0.8;
         const sfxDie = new Audio('sfx_die.mp3'); sfxDie.volume = 1.0;
 
@@ -270,13 +267,16 @@
         const ctx = canvas.getContext('2d');
         const PI2 = Math.PI * 2; 
 
-        // 核心渲染函式
+        // ★ 整數渲染引擎：大幅度壓縮瀏覽器反鋸齒資源消耗
         function drawSpriteFast(ctx, img, cx, cy, size, fallbackColor) {
+            let x = cx | 0; // 利用位元運算強制轉為整數
+            let y = cy | 0;
+            let s = size | 0;
             if (img.complete && img.naturalWidth > 0) {
-                ctx.drawImage(img, cx - size, cy - size, size * 2, size * 2);
+                ctx.drawImage(img, x - s, y - s, s * 2, s * 2);
             } else {
                 ctx.fillStyle = fallbackColor;
-                ctx.beginPath(); ctx.arc(cx, cy, size, 0, PI2); ctx.fill();
+                ctx.beginPath(); ctx.arc(x, y, s, 0, PI2); ctx.fill();
             }
         }
 
@@ -286,7 +286,6 @@
         function resize() {
             canvas.width = document.body.clientWidth;
             canvas.height = document.body.clientHeight;
-            // 偵測是否為手機，自動切換微縮與光暈模式
             isMobile = canvas.width < 768;
             gameScale = isMobile ? 0.65 : 1;
             
@@ -295,7 +294,6 @@
             }
         }
         window.addEventListener('resize', resize);
-        
 
         let gameState = 'START'; 
         const MAX_HP = 200; 
@@ -461,6 +459,9 @@
             lastTime = currentTime;
             surviveTime += deltaTime / 1000;
 
+            // ★ 音效節流旗標：記錄這個畫面影格中是否有人開火
+            let playShootThisFrame = false;
+
             difficultyLevel = Math.min(10, 1 + Math.floor(surviveTime / 3));
 
             $('#hud-time').text(Math.floor(surviveTime) + 's');
@@ -488,9 +489,7 @@
                 if (player.invincibleTimer < 0) player.invincibleTimer = 0;
             }
 
-            // ===================================
-            // 發射子彈區段 (已改用 playShootSound 避免卡頓)
-            // ===================================
+            // 主角開火
             player.fireTimer++;
             if (player.fireTimer >= player.fireRate && enemies.length > 0) {
                 let closestEnemy = null, minDistSq = Infinity;
@@ -504,10 +503,11 @@
                     let bSize = 5 * gameScale;
                     bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 12, vy: Math.sin(angle) * 12, size: bSize, color: '#FFD700' });
                     player.fireTimer = 0;
-                    playShootSound(); // ★ 高效音效
+                    playShootThisFrame = true; // 標記開火
                 }
             }
 
+            // 僚機(外資)處理
             for (let i = allies.length - 1; i >= 0; i--) {
                 let ally = allies[i];
                 ally.life -= deltaTime;
@@ -520,11 +520,8 @@
 
                 let allySize = 15 * gameScale;
                 
-                // ★ 電腦版光暈，手機版無光暈
                 ctx.save();
-                if (!isMobile) {
-                    ctx.shadowBlur = 15; ctx.shadowColor = '#00e5ff';
-                }
+                if (!isMobile) { ctx.shadowBlur = 15; ctx.shadowColor = '#00e5ff'; }
                 drawSpriteFast(ctx, imgAlly, ally.x, ally.y, allySize, '#00e5ff');
                 ctx.restore();
 
@@ -541,16 +538,21 @@
                         let bSize = 4 * gameScale;
                         bullets.push({ x: ally.x, y: ally.y, vx: Math.cos(angle) * 12, vy: Math.sin(angle) * 12, size: bSize, color: '#00e5ff' });
                         ally.fireTimer = 0;
-                        playShootSound(); // ★ 高效音效
+                        playShootThisFrame = true; // 標記開火
                     }
                 }
+            }
+
+            // ★ 音效節流：整個畫面幀不管幾台開火，只發出一次聲音，極限解放手機資源！
+            if (playShootThisFrame) {
+                playShootSound();
             }
 
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
                 b.x += b.vx; b.y += b.vy;
                 ctx.fillStyle = b.color;
-                ctx.beginPath(); ctx.arc(b.x, b.y, b.size, 0, PI2); ctx.fill();
+                ctx.beginPath(); ctx.arc(b.x | 0, b.y | 0, b.size | 0, 0, PI2); ctx.fill();
                 if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) bullets.splice(i, 1);
             }
 
@@ -561,16 +563,11 @@
                 itemSpawnTimer = 0;
             }
 
+            // ★ 拔除色塊大餅，僅保留電腦版發光
             for (let i = items.length - 1; i >= 0; i--) {
                 let item = items[i];
-                
                 ctx.save();
-                if (!isMobile) {
-                    ctx.shadowBlur = 20; ctx.shadowColor = 'red';
-                } else {
-                    ctx.fillStyle = 'rgba(255, 51, 51, 0.4)';
-                    ctx.beginPath(); ctx.arc(item.x, item.y, item.size + 8*gameScale, 0, PI2); ctx.fill();
-                }
+                if (!isMobile) { ctx.shadowBlur = 20; ctx.shadowColor = 'red'; }
                 drawSpriteFast(ctx, imgHeal, item.x, item.y, item.size, '#ff3333');
                 ctx.restore();
 
@@ -590,17 +587,11 @@
                 specialItemTimer = 0;
             }
 
+            // ★ 拔除色塊大餅，僅保留電腦版發光
             for (let i = specialItems.length - 1; i >= 0; i--) {
                 let sItem = specialItems[i];
-                
                 ctx.save();
-                let glowColor = sItem.type === 'A' ? 'yellow' : 'cyan';
-                if (!isMobile) {
-                    ctx.shadowBlur = 20; ctx.shadowColor = glowColor;
-                } else {
-                    ctx.fillStyle = sItem.type === 'A' ? 'rgba(255, 204, 0, 0.4)' : 'rgba(0, 229, 255, 0.4)';
-                    ctx.beginPath(); ctx.arc(sItem.x, sItem.y, sItem.size + 10*gameScale, 0, PI2); ctx.fill();
-                }
+                if (!isMobile) { ctx.shadowBlur = 20; ctx.shadowColor = sItem.type === 'A' ? 'yellow' : 'cyan'; }
 
                 if(sItem.type === 'A') {
                     drawSpriteFast(ctx, imgItemA, sItem.x, sItem.y, sItem.size, '#ffcc00');
@@ -644,11 +635,9 @@
                 e.x += Math.cos(angle) * e.speed; e.y += Math.sin(angle) * e.speed;
 
                 ctx.save();
-                ctx.translate(e.x, e.y);
+                ctx.translate(e.x | 0, e.y | 0);
                 ctx.rotate(angle);
-                if (!isMobile) {
-                    ctx.shadowBlur = 15; ctx.shadowColor = '#006400';
-                }
+                if (!isMobile) { ctx.shadowBlur = 15; ctx.shadowColor = '#006400'; }
                 drawSpriteFast(ctx, imgEnemy, 0, 0, e.size, '#00ff00');
                 ctx.restore();
 
@@ -669,19 +658,15 @@
                 if (e.hp <= 0) enemies.splice(i, 1);
             }
 
+            // ★ 拔除主角色塊大餅，僅保留電腦版發光
             ctx.save();
-            if (!isMobile) {
-                ctx.shadowBlur = 20; ctx.shadowColor = '#90ee90';
-            } else {
-                ctx.fillStyle = 'rgba(144, 238, 144, 0.3)';
-                ctx.beginPath(); ctx.arc(player.x, player.y, player.size + 8*gameScale, 0, PI2); ctx.fill();
-            }
+            if (!isMobile) { ctx.shadowBlur = 20; ctx.shadowColor = '#90ee90'; }
             drawSpriteFast(ctx, imgPlayer, player.x, player.y, player.size, '#00aaff');
             ctx.restore();
 
             if (player.invincibleTimer > 0) {
                 ctx.strokeStyle = `rgba(255, 215, 0, ${Math.abs(Math.sin(currentTime / 100))})`; 
-                ctx.lineWidth = 4 * gameScale; ctx.beginPath(); ctx.arc(player.x, player.y, player.size + 10*gameScale, 0, PI2); ctx.stroke();
+                ctx.lineWidth = 4 * gameScale; ctx.beginPath(); ctx.arc(player.x | 0, player.y | 0, player.size + 10*gameScale, 0, PI2); ctx.stroke();
             }
 
             let hpRatio = Math.max(0, leekCount / MAX_HP);
@@ -690,14 +675,14 @@
             let yOffset = player.size + 15 * gameScale;
             
             ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
-            ctx.fillRect(player.x - barWidth/2, player.y - yOffset, barWidth, barHeight); 
+            ctx.fillRect((player.x - barWidth/2) | 0, (player.y - yOffset) | 0, barWidth | 0, barHeight | 0); 
             
             ctx.fillStyle = hpRatio > 0.3 ? '#00ff00' : '#ff3333';
-            ctx.fillRect(player.x - barWidth/2, player.y - yOffset, barWidth * hpRatio, barHeight);
+            ctx.fillRect((player.x - barWidth/2) | 0, (player.y - yOffset) | 0, (barWidth * hpRatio) | 0, barHeight | 0);
             
             ctx.strokeStyle = '#ffffff';
             ctx.lineWidth = 1;
-            ctx.strokeRect(player.x - barWidth/2, player.y - yOffset, barWidth, barHeight); 
+            ctx.strokeRect((player.x - barWidth/2) | 0, (player.y - yOffset) | 0, barWidth | 0, barHeight | 0); 
 
             if (notifyTimer > 0) {
                 notifyTimer -= deltaTime;
@@ -705,7 +690,7 @@
                     ctx.fillStyle = notifyColor;
                     ctx.font = `bold ${24 * gameScale}px Arial`;
                     ctx.textAlign = 'center';
-                    ctx.fillText(notifyText, canvas.width / 2, canvas.height - (80 * gameScale));
+                    ctx.fillText(notifyText, (canvas.width / 2) | 0, (canvas.height - (80 * gameScale)) | 0);
                 }
             }
 
