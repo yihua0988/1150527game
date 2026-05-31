@@ -242,7 +242,6 @@
         bgm.loop = true; 
         bgm.volume = 0.5;
 
-        // ★ 取消音效變數，回歸純粹的原生播放
         const sfxShoot = new Audio('sfx_shoot.mp3'); sfxShoot.volume = 0.5;
         const sfxBuff = new Audio('sfx_buff.mp3'); sfxBuff.volume = 0.8;
         const sfxDie = new Audio('sfx_die.mp3'); sfxDie.volume = 1.0;
@@ -488,7 +487,11 @@
                     let bSize = 5 * gameScale;
                     bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 12, vy: Math.sin(angle) * 12, size: bSize, color: '#FFD700' });
                     player.fireTimer = 0;
-                    playSound(sfxShoot); 
+                    
+                    // ★ 手機版完全拔除子彈音效，電腦版正常播放
+                    if (!isMobile) {
+                        playSound(sfxShoot); 
+                    }
                 }
             }
 
@@ -504,7 +507,6 @@
 
                 let allySize = 15 * gameScale;
                 
-                // ★ 電腦版才有發光效果
                 if (!isMobile) {
                     ctx.save(); ctx.shadowBlur = 15; ctx.shadowColor = '#00e5ff';
                     drawSpriteFast(ctx, imgAlly, ally.x, ally.y, allySize, '#00e5ff');
@@ -526,7 +528,11 @@
                         let bSize = 4 * gameScale;
                         bullets.push({ x: ally.x, y: ally.y, vx: Math.cos(angle) * 12, vy: Math.sin(angle) * 12, size: bSize, color: '#00e5ff' });
                         ally.fireTimer = 0;
-                        playSound(sfxShoot); 
+                        
+                        // ★ 手機版完全拔除子彈音效，電腦版正常播放
+                        if (!isMobile) {
+                            playSound(sfxShoot); 
+                        }
                     }
                 }
             }
@@ -549,7 +555,6 @@
             for (let i = items.length - 1; i >= 0; i--) {
                 let item = items[i];
                 
-                // ★ 拔除底色大餅，手機版純裸圖
                 if (!isMobile) {
                     ctx.save(); ctx.shadowBlur = 20; ctx.shadowColor = 'red';
                     drawSpriteFast(ctx, imgHeal, item.x, item.y, item.size, '#ff3333');
@@ -577,7 +582,6 @@
             for (let i = specialItems.length - 1; i >= 0; i--) {
                 let sItem = specialItems[i];
                 
-                // ★ 拔除底色大餅
                 if (!isMobile) {
                     ctx.save(); ctx.shadowBlur = 20; ctx.shadowColor = sItem.type === 'A' ? 'yellow' : 'cyan';
                     if(sItem.type === 'A') { drawSpriteFast(ctx, imgItemA, sItem.x, sItem.y, sItem.size, '#ffcc00'); } 
@@ -594,7 +598,6 @@
                         player.invincibleTimer = 5000;
                         notifyText = "⚠️ 熔斷機制啟動：無敵 5 秒！"; notifyColor = "#ffcc00";
                     } else if (sItem.type === 'B') {
-                        // ★ 回歸 60幀 (1秒) 一發的發射速率，徹底解決手機卡頓
                         allies.push({ angle: 0, life: 10000, fireRate: 60, fireTimer: 0 });
                         allies.push({ angle: Math.PI, life: 10000, fireRate: 60, fireTimer: 0 });
                         notifyText = "💰 外資大戶進場：僚機支援！"; notifyColor = "#00e5ff";
@@ -651,7 +654,6 @@
                 if (e.hp <= 0) enemies.splice(i, 1);
             }
 
-            // ★ 拔除主角色塊大餅
             if (!isMobile) {
                 ctx.save(); ctx.shadowBlur = 20; ctx.shadowColor = '#90ee90';
                 drawSpriteFast(ctx, imgPlayer, player.x, player.y, player.size, '#00aaff');
