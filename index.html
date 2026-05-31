@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>韭菜大冒險：大盤全面跌停</title>
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0d1117">
+    
+    <link rel="stylesheet" href="bootstrap.min.css">
+    <link rel="stylesheet" href="css/all.min.css">
+    
+    <style>
+        body, html {
+            margin: 0; padding: 0; width: 100%; 
+            height: 100%; height: 100dvh; 
+            overflow: hidden; touch-action: none; 
+            font-family: 'Arial', sans-serif;
+            user-select: none;
+            background-color: #0d1117; 
+            background-image: url('bg_start.webp'); 
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+            transition: background-image 0.5s ease; 
+            -webkit-touch-callout: none; 
+        }
+
+        #bg-video {
+            position: absolute;
+            top: 0; left: 0;
+            width: 100vw; height: 100dvh;
+            object-fit: cover; 
+            z-index: 0;
+            display: none;
+            opacity: 0.1; 
+            pointer-events: none; 
+        }
+        
+        #gameCanvas {
+            display: block; position: absolute;
+            top: 0; left: 0; z-index: 1; touch-action: none;
+            width: 100vw; height: 100dvh; 
+        }
+
+        #ui-layer {
+            position: absolute; top: 0; left: 0; width: 100%; 
+            height: 100%; height: 100dvh; 
+            z-index: 10; pointer-events: none; 
+        }
+
+        .interactive { pointer-events: auto; }
+
+        .glass-panel {
+            background: rgba(0, 0, 0, 0.3); 
+            backdrop-filter: blur(8px);
+            border: 2px solid rgba(255,255,255,0.15); 
+            border-radius: 20px;
+            width: 90%; 
+            max-width: 1050px; 
+            margin: 0 auto;
+        }
+
+        .card-15x { max-width: 750px !important; width: 95%; } 
+        
+        .text-15x-title { font-size: 4rem !important; } 
+        .text-15x-xl { font-size: 3rem !important; } 
+        .text-15x-lg { font-size: 2.25rem !important; } 
+        .text-15x-md { font-size: 1.875rem !important; } 
+        .text-15x-sm { font-size: 1.5rem !important; } 
+        
+        .btn-15x {
+            font-size: 2.25rem !important; 
+            padding: 1.2rem 3rem !important; 
+            border-radius: 15px;
+        }
+
+        .giant-hud {
+            position: absolute; top: 0; font-size: 10vh; line-height: 10vh;
+            font-weight: bold; color: rgba(255, 255, 255, 0.2); 
+            text-shadow: 2px 2px 5px rgba(0,0,0,0.5); pointer-events: none; white-space: nowrap;
+        }
+        #hud-time { left: 5vw; }  
+        #hud-level { right: 5vw; } 
+
+        .dev-footer {
+            font-weight: bold;
+            color: #FFFFFF; letter-spacing: 2px;
+            text-shadow: 1px 1px 3px #000; 
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; } 
+        }
+        .blink-anim {
+            animation: blink 1.2s ease-in-out infinite;
+        }
+
+        @media (max-width: 768px) {
+            .glass-panel { padding: 1.5rem 1rem !important; }
+            .giant-hud { font-size: 6vh; line-height: 6vh; }
+            
+            .text-15x-title { font-size: 2.8rem !important; }
+            .text-15x-xl { font-size: 2.2rem !important; }
+            .text-15x-lg { font-size: 1.8rem !important; }
+            .text-15x-md { font-size: 1.3rem !important; }
+            .text-15x-sm { font-size: 1.1rem !important; }
+            .btn-15x { font-size: 1.8rem !important; padding: 1rem 2rem !important; }
+        }
+    </style>
+</head>
+<body>
+
+    <video id="bg-video" src="bg_battle.mp4" autoplay loop muted playsinline></video>
+
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="ui-layer">
+        
+        <div id="hud-time" class="giant-hud" style="display: none;">0S</div>
+        <div id="hud-level" class="giant-hud" style="display: none;">Lv.1</div>
+
+        <div id="pause-overlay" class="giant-hud w-100 text-center interactive" style="display: none; top: 40%; font-size: 8vh; color: rgba(255, 255, 255, 0.8); text-shadow: 0 0 15px red; z-index: 20; cursor: pointer;">
+            <i class="fa-solid fa-pause"></i> 遊戲暫停中<br>
+            <span style="font-size: 3vh; color: #fff; text-shadow: none;">(點擊畫面繼續)</span>
+        </div>
+
+        <div id="start-screen" class="interactive w-100" style="position: absolute; bottom: 6vh; left: 0; display: flex; flex-direction: column; align-items: center;">
+            <div class="glass-panel p-4 p-md-5 text-center shadow-lg">
+                <div class="text-light text-start mx-auto mb-4 text-15x-md" style="line-height: 1.6; max-width: 800px; padding: 20px; border-left: 6px solid #00ff00; background: rgba(0,255,0,0.1);">
+                    大盤遭降維打擊，綠K線突變噬血巨獸！撿紅利、喚外資，用肉身硬扛宇宙級股災，活下去！
+                </div>
+                <p class="text-warning fw-bold mb-4 text-15x-lg blink-anim"><i class="fa-solid fa-computer-mouse"></i> 點擊畫面任意處拖曳逃命！</p>
+                <button id="start-btn" class="btn btn-success fw-bold shadow btn-15x">
+                    <i class="fa-solid fa-play"></i> 點擊開始
+                </button>
+            </div>
+            <div class="dev-footer text-15x-sm mt-3">[獨立開發:yihua0988]</div>
+        </div>
+
+        <div id="gameover-screen" class="interactive w-100" style="display: none; position: absolute; top: 0; left: 0; height: 100dvh; background: rgba(0, 0, 0, 0.75); backdrop-filter: blur(5px); overflow-y: auto; z-index: 100;">
+            <div class="d-flex flex-column justify-content-center align-items-center w-100 py-5" style="min-height: 100dvh;">
+                
+                <h1 class="fw-bold text-success mb-4 text-15x-title" style="text-shadow: 2px 2px 10px rgba(0,0,0,0.9);">
+                    <i class="fa-solid fa-skull-crossbones"></i> 跌停斷頭！
+                </h1>
+                
+                <div class="card bg-dark text-white border-secondary mx-auto mb-4 shadow-lg card-15x">
+                    <div class="card-header bg-danger text-white fw-bold py-3 text-15x-md text-center">
+                        <i class="fa-solid fa-file-invoice-dollar"></i> 畢業對帳單
+                    </div>
+                    <div class="card-body text-start p-4 p-md-5">
+                        <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-4">
+                            <span class="text-white fw-bold text-15x-md"><i class="fa-solid fa-clock"></i> 存活時間</span>
+                            <span class="text-warning fw-bold text-15x-xl"><span id="final-time">0</span> 秒</span>
+                        </div>
+                        <div class="d-flex justify-content-between align-items-center border-bottom border-secondary pb-3 mb-4">
+                            <span class="text-white fw-bold text-15x-md"><i class="fa-solid fa-chart-line"></i> 最終難度</span>
+                            <span id="final-level" class="text-white fw-bold text-15x-md">Lv.1</span>
+                        </div>
+                        <div class="d-flex flex-column text-center mt-3">
+                            <span class="text-white fw-bold mb-3 text-15x-sm">系統評價</span>
+                            <div id="final-rank" class="bg-danger text-white rounded shadow-sm py-3 px-4 fw-bold text-15x-md w-100" style="word-break: break-word;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="restart-btn" class="btn btn-danger fw-bold shadow-lg btn-15x mb-4">
+                    <i class="fa-solid fa-rotate-right"></i> 重新入金
+                </button>
+                
+                <div class="dev-footer text-15x-sm mt-2">[獨立開發:yihua0988]</div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="jquery-4.0.0.min.js"></script>
+
+    <script>
+        document.addEventListener('contextmenu', e => e.preventDefault()); 
+        document.addEventListener('keydown', e => {
+            if (e.keyCode === 123 || 
+               (e.ctrlKey && e.shiftKey && (e.keyCode === 73 || e.keyCode === 74 || e.keyCode === 67)) || 
+               (e.ctrlKey && (e.keyCode === 85 || e.keyCode === 83))) { 
+                e.preventDefault();
+            }
+            if (e.ctrlKey && (e.key === '+' || e.key === '-' || e.key === '=')) e.preventDefault();
+        });
+        document.addEventListener('wheel', e => { if(e.ctrlKey) e.preventDefault(); }, { passive: false });
+        
+        document.addEventListener('touchstart', function(e) {
+            if (e.touches.length > 1) e.preventDefault();
+        }, { passive: false });
+
+        document.addEventListener('touchmove', function(e) {
+            if (gameState === 'PLAYING') {
+                e.preventDefault();
+            }
+        }, { passive: false });
+
+        function changeBackground(state) {
+            const body = document.body;
+            const video = document.getElementById('bg-video');
+            
+            if (state === 'START') {
+                body.style.backgroundImage = "url('bg_start.webp')";
+                video.style.display = 'none';
+                video.pause();
+            } else if (state === 'PLAYING') {
+                body.style.backgroundImage = "none"; 
+                video.muted = true;
+                video.volume = 0;
+                video.style.display = 'block';
+                video.play().catch(e => {}); 
+            } else if (state === 'GAMEOVER') {
+                body.style.backgroundImage = "url('bg_gameover.webp')";
+                video.style.display = 'none';
+                video.pause();
+            }
+        }
+
+        const imgPlayer = new Image(); imgPlayer.src = 'player.webp';
+        const imgEnemy = new Image(); imgEnemy.src = 'enemy.webp';
+        const imgAlly = new Image(); imgAlly.src = 'edited-image.webp'; 
+        const imgHeal = new Image(); imgHeal.src = 'item_heal.webp';
+        const imgItemA = new Image(); imgItemA.src = 'item_a.webp';
+        const imgItemB = new Image(); imgItemB.src = 'item_b.webp';
+
+        const bgm = new Audio('bgm.mp3'); 
+        bgm.loop = true; 
+        bgm.volume = 0.5;
+
+        const sfxShoot = new Audio('sfx_shoot.mp3'); sfxShoot.volume = 0.5;
+        const sfxBuff = new Audio('sfx_buff.mp3'); sfxBuff.volume = 0.8;
+        const sfxDie = new Audio('sfx_die.mp3'); sfxDie.volume = 1.0;
+
+        function playSound(audioObj) {
+            let clone = audioObj.cloneNode();
+            clone.volume = audioObj.volume;
+            clone.play().catch(e => {}); 
+        }
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        function drawSpriteSafely(ctx, img, cx, cy, size, fallbackColor) {
+            try {
+                if (img.complete && img.naturalWidth > 0) {
+                    ctx.drawImage(img, cx - size, cy - size, size * 2, size * 2);
+                } else {
+                    ctx.fillStyle = fallbackColor;
+                    ctx.beginPath(); ctx.arc(cx, cy, size, 0, Math.PI * 2); ctx.fill();
+                }
+            } catch (e) {
+                ctx.fillStyle = fallbackColor;
+                ctx.beginPath(); ctx.arc(cx, cy, size, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+
+        function resize() {
+            canvas.width = document.body.clientWidth;
+            canvas.height = document.body.clientHeight;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        let gameState = 'START'; 
+        const MAX_HP = 200; 
+        let leekCount = MAX_HP; 
+        let surviveTime = 0;
+        let difficultyLevel = 1; 
+
+        let enemies = [], bullets = [], items = [], specialItems = [], allies = [];
+
+        let player = {
+            x: canvas.width / 2, y: canvas.height / 2,
+            size: 20, speed: 0.15, fireRate: 60, fireTimer: 0, invincibleTimer: 0 
+        };
+        let target = { x: canvas.width / 2, y: canvas.height / 2 };
+
+        let enemySpawnTimer = 0, enemySpawnInterval = 500; 
+        let itemSpawnTimer = 0, itemSpawnInterval = 800; 
+        let specialItemTimer = 0, specialItemInterval = 15000; 
+        
+        let notifyTimer = 0, notifyText = "", notifyColor = "";
+        let lastTime = 0, animFrameId = null; 
+
+        let isPaused = false; 
+
+        function pauseGame() {
+            if (gameState === 'PLAYING' && !isPaused) {
+                isPaused = true;
+                $('#pause-overlay').show(); 
+                if (bgm) bgm.pause(); 
+                const video = document.getElementById('bg-video');
+                if (video) video.pause(); 
+            }
+        }
+
+        function resumeGame() {
+            if (gameState === 'PLAYING' && isPaused) {
+                isPaused = false;
+                $('#pause-overlay').hide();
+                lastTime = performance.now(); 
+                if (bgm) bgm.play().catch(e => {}); 
+                const video = document.getElementById('bg-video');
+                if (video) video.play().catch(e => {});
+            }
+        }
+
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden) pauseGame();
+            else resumeGame();
+        });
+
+        $('#pause-overlay').on('click', function() {
+            resumeGame();
+        });
+
+        const rankTitles = [
+            "Lv.1 剛開戶的單細胞浮游韭菜", "Lv.2 追高殺低的送財童子", "Lv.3 睡在公園紙箱的尊爵VIP",
+            "Lv.4 刪APP啟動物理防禦的阿Q", "Lv.5 抵押阿嬤房子攤平的無雙勇者", "Lv.6 靠吃土達成光合作用的生還者",
+            "Lv.7 讓主力割到鐮刀卷刃的鈦合金神人", "Lv.8 暗中操控華爾街的地下總司令", 
+            "Lv.9 隨手捏爆綠K線的量子級黑手", "Lv.10 宇宙大爆炸也跌不破的次元股神"
+        ];
+
+        changeBackground('START');
+
+        $('#start-btn').on('click', function() {
+            $('#start-screen').fadeOut(200, function() {
+                $('.giant-hud').fadeIn(200);
+                startGame();
+            });
+        });
+
+        $('#restart-btn').on('click', function() {
+            $('#gameover-screen').fadeOut(200, function() {
+                $('.giant-hud').fadeIn(200);
+                startGame();
+            });
+        });
+
+        function startGame() {
+            changeBackground('PLAYING'); 
+            isPaused = false;
+            $('#pause-overlay').hide();
+
+            bgm.pause(); 
+            bgm.currentTime = 0;
+            bgm.play().catch(e => {});
+
+            leekCount = MAX_HP; surviveTime = 0; difficultyLevel = 1;
+            enemies = []; bullets = []; items = []; specialItems = []; allies = [];
+            player.x = canvas.width / 2; player.y = canvas.height / 2;
+            player.invincibleTimer = 0; notifyTimer = 0;
+            target.x = canvas.width / 2; target.y = canvas.height / 2;
+            enemySpawnInterval = 500; specialItemTimer = 0;
+            
+            gameState = 'PLAYING';
+            lastTime = performance.now();
+            if(animFrameId) cancelAnimationFrame(animFrameId);
+            gameLoop(lastTime);
+        }
+
+        function gameOver() {
+            gameState = 'GAMEOVER';
+            changeBackground('GAMEOVER'); 
+            bgm.pause(); 
+            playSound(sfxDie); 
+
+            $('.giant-hud').hide();
+            $('#pause-overlay').hide(); 
+            $('#final-time').text(Math.floor(surviveTime));
+            
+            // 顯示的評價等級
+            $('#final-level').html(difficultyLevel >= 10 ? '<span class="text-success">大盤全面跌停</span>' : `Lv.${difficultyLevel}`);
+            let rankIndex = Math.min(9, difficultyLevel - 1);
+            $('#final-rank').html(rankTitles[rankIndex]);
+            
+            $('#gameover-screen').fadeIn(300);
+        }
+
+        function updateTarget(e) { target.x = e.clientX; target.y = e.clientY - 40; }
+
+        canvas.addEventListener('pointerdown', (e) => {
+            if (gameState === 'PLAYING' && !isPaused) { canvas.setPointerCapture(e.pointerId); updateTarget(e); }
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            if (gameState === 'PLAYING' && !isPaused && (e.buttons > 0 || e.pointerType === 'touch')) updateTarget(e);
+        });
+
+        function getDistance(x1, y1, x2, y2) { return Math.hypot(x2 - x1, y2 - y1); }
+
+        function gameLoop(currentTime) {
+            if (gameState !== 'PLAYING') return; 
+            
+            if (isPaused) {
+                lastTime = currentTime; 
+                animFrameId = requestAnimationFrame(gameLoop);
+                return;
+            }
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            let deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+            surviveTime += deltaTime / 1000;
+
+            // ==========================================
+            // ★ 分離邏輯 1：單純計算「顯示用」的評價等級
+            // 0~30秒維持Lv.1，之後每10秒升1級
+            // ==========================================
+            if (surviveTime < 30) {
+                difficultyLevel = 1;
+            } else {
+                difficultyLevel = Math.min(10, 2 + Math.floor((surviveTime - 30) / 10));
+            }
+
+            // 更新畫面上方的等級文字
+            $('#hud-time').text(Math.floor(surviveTime) + 's');
+            $('#hud-level').text(difficultyLevel >= 10 ? '大盤全面跌停' : `Lv.${difficultyLevel}`);
+            if(difficultyLevel >= 10) $('#hud-level').css('color', 'rgba(0, 255, 0, 0.3)');
+
+            // ==========================================
+            // ★ 分離邏輯 2：維持原始的「遊戲內怪物難度」推進
+            // 保留你原本熟悉的生怪與加速節奏，不受上方評價等級影響
+            // ==========================================
+            let cycle30 = Math.floor(surviveTime / 30); 
+            enemySpawnInterval = Math.max(16, 500 / Math.pow(1.3, cycle30)); 
+
+
+            player.x += (target.x - player.x) * player.speed;
+            player.y += (target.y - player.y) * player.speed;
+
+            if (player.x < player.size) player.x = player.size;
+            if (player.x > canvas.width - player.size) player.x = canvas.width - player.size;
+            if (player.y < player.size) player.y = player.size;
+            if (player.y > canvas.height - player.size) player.y = canvas.height - player.size;
+
+            if (player.invincibleTimer > 0) {
+                player.invincibleTimer -= deltaTime;
+                if (player.invincibleTimer < 0) player.invincibleTimer = 0;
+            }
+
+            player.fireTimer++;
+            if (player.fireTimer >= player.fireRate && enemies.length > 0) {
+                let closestEnemy = null, minDist = Infinity;
+                enemies.forEach(e => {
+                    let d = getDistance(player.x, player.y, e.x, e.y);
+                    if (d < minDist) { minDist = d; closestEnemy = e; }
+                });
+                if (closestEnemy) {
+                    let angle = Math.atan2(closestEnemy.y - player.y, closestEnemy.x - player.x);
+                    bullets.push({ x: player.x, y: player.y, vx: Math.cos(angle) * 12, vy: Math.sin(angle) * 12, size: 5, color: '#FFD700' });
+                    player.fireTimer = 0;
+                    playSound(sfxShoot); 
+                }
+            }
+
+            for (let i = allies.length - 1; i >= 0; i--) {
+                let ally = allies[i];
+                ally.life -= deltaTime;
+                if (ally.life <= 0) { allies.splice(i, 1); continue; }
+
+                ally.angle += 0.05; 
+                ally.x = player.x + Math.cos(ally.angle) * 50; 
+                ally.y = player.y + Math.sin(ally.angle) * 50;
+
+                drawSpriteSafely(ctx, imgAlly, ally.x, ally.y, 15, '#00e5ff');
+
+                ally.fireTimer++;
+                if (ally.fireTimer >= ally.fireRate && enemies.length > 0) {
+                    let closestEnemy = null, minDist = Infinity;
+                    enemies.forEach(e => {
+                        let d = getDistance(ally.x, ally.y, e.x, e.y);
+                        if (d < minDist) { minDist = d; closestEnemy = e; }
+                    });
+                    if (closestEnemy) {
+                        let angle = Math.atan2(closestEnemy.y - ally.y, closestEnemy.x - ally.x);
+                        bullets.push({ x: ally.x, y: ally.y, vx: Math.cos(angle) * 12, vy: Math.sin(angle) * 12, size: 4, color: '#00e5ff' });
+                        ally.fireTimer = 0;
+                        playSound(sfxShoot); 
+                    }
+                }
+            }
+
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.x += b.vx; b.y += b.vy;
+                ctx.fillStyle = b.color;
+                ctx.beginPath(); ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2); ctx.fill();
+                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) bullets.splice(i, 1);
+            }
+
+            itemSpawnTimer += deltaTime;
+            if (itemSpawnTimer > itemSpawnInterval) {
+                items.push({ x: Math.random() * canvas.width, y: Math.random() * canvas.height, size: 15, healValue: Math.floor(Math.random() * 20) + 5 });
+                itemSpawnTimer = 0;
+            }
+
+            for (let i = items.length - 1; i >= 0; i--) {
+                let item = items[i];
+                
+                ctx.save();
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = 'red';
+                drawSpriteSafely(ctx, imgHeal, item.x, item.y, item.size, '#ff3333');
+                ctx.restore();
+
+                if (getDistance(player.x, player.y, item.x, item.y) < player.size + item.size) {
+                    leekCount += item.healValue;
+                    if (leekCount > MAX_HP) leekCount = MAX_HP; 
+                    items.splice(i, 1);
+                }
+            }
+
+            specialItemTimer += deltaTime;
+            if (specialItemTimer > specialItemInterval) {
+                let sx = Math.max(50, Math.min(canvas.width - 50, Math.random() * canvas.width));
+                let sy = Math.max(50, Math.min(canvas.height - 50, Math.random() * canvas.height));
+                specialItems.push({ x: sx, y: sy, size: 20, type: Math.random() > 0.5 ? 'A' : 'B' });
+                specialItemTimer = 0;
+            }
+
+            for (let i = specialItems.length - 1; i >= 0; i--) {
+                let sItem = specialItems[i];
+                
+                ctx.save();
+                ctx.shadowBlur = 20;
+                ctx.shadowColor = sItem.type === 'A' ? 'yellow' : 'cyan';
+                if(sItem.type === 'A') {
+                    drawSpriteSafely(ctx, imgItemA, sItem.x, sItem.y, sItem.size, '#ffcc00');
+                } else {
+                    drawSpriteSafely(ctx, imgItemB, sItem.x, sItem.y, sItem.size, '#00e5ff');
+                }
+                ctx.restore();
+
+                if (getDistance(player.x, player.y, sItem.x, sItem.y) < player.size + sItem.size) {
+                    playSound(sfxBuff); 
+                    if (sItem.type === 'A') {
+                        player.invincibleTimer = 5000;
+                        notifyText = "⚠️ 熔斷機制啟動：無敵 5 秒！"; notifyColor = "#ffcc00";
+                    } else if (sItem.type === 'B') {
+                        allies.push({ angle: 0, life: 10000, fireRate: 18, fireTimer: 0 });
+                        allies.push({ angle: Math.PI, life: 10000, fireRate: 18, fireTimer: 0 });
+                        notifyText = "💰 外資大戶進場：僚機支援！"; notifyColor = "#00e5ff";
+                    }
+                    notifyTimer = 3000; 
+                    specialItems.splice(i, 1);
+                }
+            }
+
+            enemySpawnTimer += deltaTime;
+            if (enemySpawnTimer > enemySpawnInterval) {
+                let ex = Math.random() > 0.5 ? (Math.random() > 0.5 ? 0 : canvas.width) : Math.random() * canvas.width;
+                let ey = ex === 0 || ex === canvas.width ? Math.random() * canvas.height : (Math.random() > 0.5 ? 0 : canvas.height);
+                
+                // ★ 恢復原本的怪物移動速度邏輯，確保原始遊戲體驗
+                let baseSpeed = Math.random() * 2 + 2; 
+                let speedIncrement = Math.floor(surviveTime / 3) * 0.5;
+                let crazySpeed = (baseSpeed + speedIncrement) * Math.pow(1.3, cycle30);
+
+                enemies.push({ x: ex, y: ey, size: 22, speed: crazySpeed, hp: 1 });
+                enemySpawnTimer = 0;
+            }
+
+            for (let i = enemies.length - 1; i >= 0; i--) {
+                let e = enemies[i];
+                let angle = Math.atan2(player.y - e.y, player.x - e.x);
+                e.x += Math.cos(angle) * e.speed; e.y += Math.sin(angle) * e.speed;
+
+                ctx.save();
+                ctx.translate(e.x, e.y);
+                ctx.rotate(angle);
+                
+                ctx.shadowBlur = 15;
+                ctx.shadowColor = '#006400'; 
+
+                try {
+                    if (imgEnemy.complete && imgEnemy.naturalWidth > 0) {
+                        ctx.drawImage(imgEnemy, -e.size, -e.size, e.size * 2, e.size * 2);
+                    } else {
+                        ctx.fillStyle = '#00ff00';
+                        ctx.beginPath(); ctx.arc(0, 0, e.size, 0, Math.PI * 2); ctx.fill();
+                    }
+                } catch(err) {
+                    ctx.fillStyle = '#00ff00';
+                    ctx.beginPath(); ctx.arc(0, 0, e.size, 0, Math.PI * 2); ctx.fill();
+                }
+                ctx.restore();
+
+                if (getDistance(player.x, player.y, e.x, e.y) < player.size + e.size) {
+                    if (player.invincibleTimer > 0) { 
+                        e.hp = 0; 
+                    } else { 
+                        leekCount -= 10; e.hp = 0; 
+                    }
+                }
+
+                for (let j = bullets.length - 1; j >= 0; j--) {
+                    let b = bullets[j];
+                    if (getDistance(b.x, b.y, e.x, e.y) < b.size + e.size) {
+                        e.hp -= 1; bullets.splice(j, 1); break; 
+                    }
+                }
+                if (e.hp <= 0) enemies.splice(i, 1);
+            }
+
+            ctx.save();
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#90ee90'; 
+            drawSpriteSafely(ctx, imgPlayer, player.x, player.y, player.size, '#00aaff');
+            ctx.restore();
+
+            if (player.invincibleTimer > 0) {
+                ctx.strokeStyle = `rgba(255, 215, 0, ${Math.abs(Math.sin(currentTime / 100))})`; 
+                ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(player.x, player.y, player.size + 10, 0, Math.PI * 2); ctx.stroke();
+            }
+
+            let hpRatio = Math.max(0, leekCount / MAX_HP);
+            let barWidth = 40;
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+            ctx.fillRect(player.x - barWidth/2, player.y - player.size - 15, barWidth, 6); 
+            
+            ctx.fillStyle = hpRatio > 0.3 ? '#00ff00' : '#ff3333';
+            ctx.fillRect(player.x - barWidth/2, player.y - player.size - 15, barWidth * hpRatio, 6);
+            
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 1;
+            ctx.strokeRect(player.x - barWidth/2, player.y - player.size - 15, barWidth, 6); 
+
+            if (notifyTimer > 0) {
+                notifyTimer -= deltaTime;
+                if (Math.floor(currentTime / 150) % 2 === 0) {
+                    ctx.fillStyle = notifyColor;
+                    ctx.font = 'bold 24px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(notifyText, canvas.width / 2, canvas.height - 80);
+                }
+            }
+
+            if (leekCount <= 0 && player.invincibleTimer <= 0) {
+                gameOver();
+            } else {
+                animFrameId = requestAnimationFrame(gameLoop);
+            }
+        }
+    </script>
+</body>
+</html>
