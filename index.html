@@ -100,17 +100,6 @@
             animation: blink 1.2s ease-in-out infinite;
         }
 
-        /* ★ 新增：手機打橫時的警告遮罩 */
-        #landscape-warning {
-            display: none;
-            position: fixed; top: 0; left: 0; width: 100vw; height: 100dvh;
-            background: #0d1117; color: #ff3333; z-index: 9999;
-            flex-direction: column; align-items: center; justify-content: center;
-            text-align: center; padding: 20px;
-        }
-        #landscape-warning i { font-size: 5rem; margin-bottom: 20px; animation: blink 1.5s infinite; }
-        #landscape-warning p { font-size: 2rem; font-weight: bold; }
-
         @media (max-width: 768px) {
             .glass-panel { padding: 1.5rem 1rem !important; border-radius: 15px; }
             .giant-hud { font-size: 5vh; line-height: 5vh; }
@@ -125,20 +114,9 @@
             .card-body { padding: 1.5rem !important; }
             .dev-footer { font-size: 0.8rem; }
         }
-
-        /* ★ 強制手機版在橫向時隱藏遊戲畫面，顯示警告 */
-        @media screen and (orientation: landscape) and (max-height: 600px) {
-            #landscape-warning { display: flex !important; }
-            #ui-layer, #gameCanvas, #bg-video { display: none !important; }
-        }
     </style>
 </head>
 <body>
-
-    <div id="landscape-warning">
-        <i class="fa-solid fa-mobile-screen"></i>
-        <p>請將手機旋轉至直向<br>以獲得最佳遊戲體驗</p>
-    </div>
 
     <video id="bg-video" src="bg_battle.mp4" autoplay loop muted playsinline></video>
 
@@ -264,10 +242,11 @@
         const sfxBuff = new Audio('sfx_buff.mp3'); sfxBuff.volume = 0.8;
         const sfxDie = new Audio('sfx_die.mp3'); sfxDie.volume = 1.0;
 
+        // ★ 核心修復：拔除 cloneNode，避免手機判定為無授權的新物件並節省記憶體
         function playSound(audioObj) {
-            let clone = audioObj.cloneNode();
-            clone.volume = audioObj.volume;
-            clone.play().catch(e => {}); 
+            audioObj.currentTime = 0;
+            let p = audioObj.play();
+            if (p !== undefined) p.catch(e => {}); 
         }
 
         const canvas = document.getElementById('gameCanvas');
@@ -292,8 +271,6 @@
         function resize() {
             canvas.width = document.body.clientWidth;
             canvas.height = document.body.clientHeight;
-            
-            // 更精準的手機偵測：取寬高最小值
             isMobile = Math.min(window.innerWidth, window.innerHeight) < 768;
             gameScale = isMobile ? 0.65 : 1;
             
@@ -301,7 +278,6 @@
                 player.size = 20 * gameScale;
             }
 
-            // ★ 若在手機上打橫，自動暫停遊戲
             if (isMobile && canvas.width > canvas.height) {
                 if (gameState === 'PLAYING' && !isPaused) pauseGame();
             }
@@ -364,7 +340,6 @@
         });
 
         $('#pause-overlay').on('click', function() {
-            // 如果畫面是橫的就不允許手動解除暫停
             if (isMobile && canvas.width > canvas.height) return;
             resumeGame();
         });
@@ -378,17 +353,19 @@
 
         changeBackground('START');
 
+        // ★ 核心修復：在點擊的「同步瞬間」立刻強制喚醒音訊，不等待動畫
         $('#start-btn').on('click', function() {
-            // ★ 請求全螢幕，並嘗試透過 API 鎖定直向
             try {
                 if (document.documentElement.requestFullscreen) {
-                    document.documentElement.requestFullscreen().then(() => {
-                        if(screen.orientation && screen.orientation.lock) {
-                            screen.orientation.lock('portrait').catch(e => console.log("Orientation lock failed", e));
-                        }
-                    }).catch(e => {});
+                    document.documentElement.requestFullscreen().catch(e => {});
                 }
             } catch (err) {}
+
+            // 在這裡立刻發送 Play 指令，綁定實體點擊手勢
+            bgm.play().catch(e => {});
+            sfxBuff.load(); 
+            sfxDie.load();
+            if(!isMobile) sfxShoot.load();
 
             $('#start-screen').fadeOut(200, function() {
                 $('.giant-hud').fadeIn(200);
@@ -397,6 +374,8 @@
         });
 
         $('#restart-btn').on('click', function() {
+            bgm.play().catch(e => {});
+            
             $('#gameover-screen').fadeOut(200, function() {
                 $('.giant-hud').fadeIn(200);
                 startGame();
@@ -408,9 +387,8 @@
             isPaused = false;
             $('#pause-overlay').hide();
 
-            bgm.pause(); 
             bgm.currentTime = 0;
-            bgm.play().catch(e => {});
+            if (bgm.paused) bgm.play().catch(e => {});
 
             leekCount = MAX_HP; surviveTime = 0; difficultyLevel = 1;
             enemies = []; bullets = []; items = []; specialItems = []; allies = [];
